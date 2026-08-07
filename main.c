@@ -141,21 +141,15 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     }
   }
 
-  if(grow) addToSnake(snake[snakeSize]);
+  if(grow) addToSnake(snake[snakeSize - 1]);
   grow = false;
 
-  for(size_t i = snakeSize; i > 0; i--) {
-    if((snakeSize > 0) && (snake[0].x == snake[i].x) &&
-        (snake[0].y == snake[i].y)) {
-      printf("You died.\n");
-      resetGame();
-    }
-    snake[i].x = snake[i - 1].x;
-    snake[i].y = snake[i - 1].y;
+  for(size_t i = snakeSize; i > 1; i--) {
+    snake[i - 1] = snake[i - 2];
   }
 
   SDL_SetRenderDrawColor(renderer, 180, 50, 50, SDL_ALPHA_OPAQUE);
-  for(size_t i = snakeSize; i > 0; i--) {
+  for(size_t i = 1; i < snakeSize; i++) {
     drawRect.x = snake[i].x * TILE_SIZE;
     drawRect.y = snake[i].y * TILE_SIZE;
     SDL_RenderFillRect(renderer, &drawRect);
@@ -170,6 +164,15 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     if(snake[0].y >= (WINDOW_HEIGHT / TILE_SIZE)) snake[0].y = 0;
     if(snake[0].x < 0) snake[0].x = (WINDOW_WIDTH / TILE_SIZE) - 1;
     if(snake[0].y < 0) snake[0].y = (WINDOW_HEIGHT / TILE_SIZE) - 1;
+
+    for(size_t i = 1; i < snakeSize; i++) {
+      if((snake[0].x == snake[i].x) && (snake[0].y == snake[i].y)) {
+        printf("You died.\n");
+        resetGame();
+        break;
+      }
+    }
+
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
     drawRect.x = snake[0].x * TILE_SIZE;
     drawRect.y = snake[0].y * TILE_SIZE;
@@ -178,7 +181,8 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 
   SDL_RenderPresent(renderer);
 
-  if(snakeSize >= (WINDOW_WIDTH / TILE_SIZE) * (WINDOW_HEIGHT / TILE_SIZE)) {
+  // if(snakeSize >= (WINDOW_WIDTH / TILE_SIZE) * (WINDOW_HEIGHT / TILE_SIZE)) {
+  if(snakeSize >= 20) {
     printf("You won!\n");
     resetGame();
   }
