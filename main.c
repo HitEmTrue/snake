@@ -182,7 +182,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
   SDL_RenderPresent(renderer);
 
   // if(snakeSize >= (WINDOW_WIDTH / TILE_SIZE) * (WINDOW_HEIGHT / TILE_SIZE)) {
-  if(snakeSize >= 20) {
+  if(snakeSize >= 40) {
     printf("You won!\n");
     resetGame();
   }
