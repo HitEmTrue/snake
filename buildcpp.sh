@@ -1,2 +1,4 @@
-g++ -Wall -Wextra main.cpp -lSDL3 -o snake
+g++ -Wall -Wextra main.cpp \
+    $(pkg-config --cflags --libs sdl3 sdl3-ttf) \
+    -o snake
 

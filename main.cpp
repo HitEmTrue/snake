@@ -1,5 +1,9 @@
 #include <SDL3/SDL_init.h>
 #include <SDL3/SDL_pixels.h>
+#include <SDL3_ttf/SDL_textengine.h>
+#include <SDL3_ttf/SDL_ttf.h>
+
+
 #define SDL_MAIN_USE_CALLBACKS 1
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -7,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <filesystem>
 
 
 #define WINDOW_WIDTH 640
@@ -22,16 +27,22 @@
 
 class Game {
     bool grow;
+    bool isPaused;
     int wins;
     int losses;
     int direction;
     size_t snakeSize, snakeCap, foodSize, foodCap;
     SDL_Point *snake, *food;
     SDL_FRect drawRect;
-
     SDL_Window *window;
     SDL_Renderer *renderer;
+    TTF_Font *font;
 
+    static constexpr const char* fontDirectory = "assets/fonts/";
+    static constexpr const char* fontBitCountGridDouble = "BitcountGridDoubleInk-VariableFont_CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght.ttf";
+    static constexpr const char* fontBitcountSingle = "BitcountSingle-VariableFont_CRSV,ELSH,ELXP,slnt,wght.ttf";
+    static constexpr const char* fontSixtyfourConvergence = "SixtyfourConvergence-Regular-VariableFont_BLED,SCAN,XELA,YELA.ttf";
+    static constexpr const char* fontWorkbenchRegular = "Workbench-Regular-VariableFont_BLED,SCAN.ttf";
     SDL_Point randomTile() {
         return (SDL_Point){rand() % (WINDOW_WIDTH / TILE_SIZE - 1),
                rand() % (WINDOW_HEIGHT / TILE_SIZE - 1)};
@@ -41,6 +52,8 @@ class Game {
         Game()
             : renderer (nullptr),
                 window (nullptr),
+                font(nullptr),
+                isPaused(false),
                 snakeSize(0)
         {
         }
@@ -73,12 +86,12 @@ class Game {
 
         void DrawSnakeBodySegment(int32_t game_x, int32_t game_y) {
             SDL_SetRenderDrawColor(renderer, 180, 50, 50, SDL_ALPHA_OPAQUE);
-            DrawCircle(renderer, game_x, game_y, true, TILE_SIZE - 4);
+            DrawCircle(game_x, game_y, true, TILE_SIZE - 4);
         }
 
         void DrawSnakeHead(int32_t game_x, int32_t game_y) {
             SDL_SetRenderDrawColor(renderer, 255, 165, 0, SDL_ALPHA_OPAQUE);
-            DrawCircle(renderer, game_x, game_y, true, TILE_SIZE);
+            DrawCircle(game_x, game_y, true, TILE_SIZE);
 
             const int32_t centreX = game_x * TILE_SIZE + TILE_SIZE / 2;
             const int32_t centreY = game_y * TILE_SIZE + TILE_SIZE / 2;
@@ -129,7 +142,7 @@ class Game {
 
 
 
-        void DrawCircle(SDL_Renderer * renderer, int32_t game_x, int32_t game_y,
+        void DrawCircle(int32_t game_x, int32_t game_y,
                         bool filled, int32_t diameter)
         {
 
@@ -211,19 +224,32 @@ class Game {
               }
 
 
-              if(!SDL_CreateWindowAndRenderer("Snake", WINDOW_WIDTH, WINDOW_HEIGHT, 0,
+           if(!SDL_CreateWindowAndRenderer("Snake", WINDOW_WIDTH, WINDOW_HEIGHT, 0,
                                                &window, &renderer)) {
                 SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
                 return SDL_APP_FAILURE;
-              }
-              SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+           }
+           SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
-              drawRect.w = drawRect.h = TILE_SIZE;
-              srand(time(NULL));
+           if (!TTF_Init()) {
+                SDL_Log("Couldn't initialize SDL_ttf: %s\n", SDL_GetError());
+                return SDL_APP_FAILURE;
+            }
 
-              game->resetGame();
+            fs::path fullPath = fontDirectory;
+           fullPath /= fontBitCountGridDouble;
 
-              return SDL_APP_CONTINUE;
+
+
+
+           // font = TTF_OpenFont(const char *file, 22)
+
+            drawRect.w = drawRect.h = TILE_SIZE;
+            srand(time(NULL));
+
+            game->resetGame();
+
+            return SDL_APP_CONTINUE;
 
         }
 
@@ -238,6 +264,14 @@ class Game {
                         case SDL_SCANCODE_ESCAPE:
                         case SDL_SCANCODE_Q:
                           return SDL_APP_SUCCESS;
+                        case SDL_SCANCODE_P:
+                          // return SDL_APP_SUCCESS;
+                          isPaused = true;
+                          break;
+                        case SDL_SCANCODE_C:
+                          if (isPaused)
+                              isPaused = false;
+                          break;
                         case SDL_SCANCODE_W:
                         case SDL_SCANCODE_UP:
                           direction = UP;
@@ -268,6 +302,10 @@ class Game {
         }
 
         SDL_AppResult Iterate(void *appstate) {
+
+            if (isPaused)
+                return SDL_APP_CONTINUE;
+
 
             Game *game = static_cast<Game *>(appstate);
         
@@ -323,7 +361,7 @@ class Game {
           SDL_RenderPresent(renderer);
 
           // if(snakeSize >= (WINDOW_WIDTH / TILE_SIZE) * (WINDOW_HEIGHT / TILE_SIZE)) {
-          if(snakeSize >= 40) {
+          if(snakeSize >= 200) {
             printf("You won!\n");
             game->resetGame(); }
           SDL_Delay(90);
