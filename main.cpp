@@ -58,23 +58,23 @@ class Game {
     
     public:
         Game()
-      : grow(false),
-        isPaused(false),
-        wins(0),
-        losses(0),
-        direction(UP),
-        snakeSize(0),
-        snakeCap(0),
-        foodSize(0),
-        foodCap(0),
-        snake(nullptr),
-        food(nullptr),
-        window(nullptr),
-        renderer(nullptr),
-        font(nullptr),
-        textureGamePaused(nullptr),
-        textureYouWon(nullptr),
-        textureYouLost(nullptr)
+          : grow(false),
+            isPaused(false),
+            wins(0),
+            losses(0),
+            direction(UP),
+            snakeSize(0),
+            snakeCap(0),
+            foodSize(0),
+            foodCap(0),
+            snake(nullptr),
+            food(nullptr),
+            window(nullptr),
+            renderer(nullptr),
+            font(nullptr),
+            textureGamePaused(nullptr),
+            textureYouWon(nullptr),
+            textureYouLost(nullptr)
         {
         }
 
@@ -103,10 +103,23 @@ class Game {
           foodSize++;
         }
 
+        void dropFood(size_t foodIndex) {
+            food[foodIndex] = randomTile();
+            
+//            if (snakeSize > 0) {
+//                // draw snake body
+//                for(size_t i = 1; i < snakeSize; i++) {
+//                    DrawSnakeBodySegment(snake[i].x, snake[i].y);
+//                }
+//                // draw snake head
+//               DrawSnakeHead(snake[0].x, snake[0].y);
+//            }
+        }
+
         void ShowPaused() {
             int w = 0, h = 0;
             SDL_FRect dst;
-            const float scale = 4.0f;
+            const float scale = 1.0f;
 
 
             SDL_GetRenderOutputSize(renderer, &w, &h);
@@ -179,8 +192,6 @@ class Game {
             SDL_RenderLine(renderer, mouthStartX, mouthStartY, mouthEndX, mouthEndY);
         }
 
-
-
         void DrawCircle(int32_t game_x, int32_t game_y,
                         bool filled, int32_t diameter)
         {
@@ -238,17 +249,17 @@ class Game {
 
 
         void addToSnake(SDL_Point point) {
-          if(snakeSize == snakeCap) {
-            size_t newCap = (snakeCap == 0) ? 1 : snakeCap * 2;
-            SDL_Point *tmp_snake = (SDL_Point *)realloc(snake, newCap * sizeof(SDL_Point));
-            if(tmp_snake == NULL) {
-              free(snake);
-              free(food);
-              exit(1);
+            if(snakeSize == snakeCap) {
+                size_t newCap = (snakeCap == 0) ? 1 : snakeCap * 2;
+                SDL_Point *tmp_snake = (SDL_Point *)realloc(snake, newCap * sizeof(SDL_Point));
+                if(tmp_snake == NULL) {
+                    free(snake);
+                    free(food);
+                    exit(1);
+                }
+                snake = tmp_snake;
+                snakeCap = newCap;
             }
-            snake = tmp_snake;
-            snakeCap = newCap;
-          }
           snake[snakeSize] = point;
           snakeSize++;
         }
@@ -365,84 +376,92 @@ class Game {
 
         SDL_AppResult Iterate(void *appstate) {
 
+            Game *game = static_cast<Game *>(appstate);
+
+            if (!isPaused) {
+                // food logic...is snake head on food?
+                for(size_t i = 0; i < foodSize; i++) {
+                    if((snakeSize > 0) && (food[i].x == snake[0].x) &&
+                            (food[i].y == snake[0].y)) {
+                        addToSnake(snake[snakeSize - 1]);
+                        dropFood(i);
+                    }
+                }
+
+                // calculate new positions for snake body
+                // this is follow the leader
+                for(size_t i = snakeSize; i > 1; i--) {
+                    snake[i - 1] = snake[i - 2];
+                }
+
+                // calculate new position for snake head
+                if(snakeSize > 0) {
+                    if(direction == UP) snake[0].y--;
+                    if(direction == DOWN) snake[0].y++;
+                    if(direction == LEFT) snake[0].x--;
+                    if(direction == RIGHT) snake[0].x++;
+                    if(snake[0].x >= (WINDOW_WIDTH / TILE_SIZE)) snake[0].x = 0;
+                    if(snake[0].y >= (WINDOW_HEIGHT / TILE_SIZE)) snake[0].y = 0;
+                    if(snake[0].x < 0) snake[0].x = (WINDOW_WIDTH / TILE_SIZE) - 1;
+                    if(snake[0].y < 0) snake[0].y = (WINDOW_HEIGHT / TILE_SIZE) - 1;
+
+                    for(size_t i = 1; i < snakeSize; i++) {
+                        if((snake[0].x == snake[i].x) && (snake[0].y == snake[i].y)) {
+                            printf("You died.\n");
+                            game->resetGame();
+                            break;
+                        }
+                    }
+
+                }
+            }
+
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+            SDL_RenderClear(renderer);
+
+            // draw food
+            SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
+            for(size_t i = 0; i < foodSize; i++) {
+                drawRect.x = food[i].x * TILE_SIZE;
+                drawRect.y = food[i].y * TILE_SIZE;
+                SDL_RenderFillRect(renderer, &drawRect);
+            }
+
+
+            if (snakeSize > 0) {
+                // draw snake body
+                for(size_t i = 1; i < snakeSize; i++) {
+                    DrawSnakeBodySegment(snake[i].x, snake[i].y);
+                }
+                // draw snake head
+                DrawSnakeHead(snake[0].x, snake[0].y);
+            }
+
             if (isPaused) {
                 ShowPaused();
-                return SDL_APP_CONTINUE;
             }
 
+            SDL_RenderPresent(renderer);
 
-            Game *game = static_cast<Game *>(appstate);
-        
-          SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-          SDL_RenderClear(renderer);
-
-          SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
-          for(size_t i = 0; i < foodSize; i++) {
-            drawRect.x = food[i].x * TILE_SIZE;
-            drawRect.y = food[i].y * TILE_SIZE;
-            SDL_RenderFillRect(renderer, &drawRect);
-            if((snakeSize > 0) && (food[i].x == snake[0].x) &&
-                (food[i].y == snake[0].y)) {
-              grow = true;
-              food[i] = randomTile();
-            }
-          }
-
-          if(grow) game->addToSnake(snake[snakeSize - 1]);
-          grow = false;
-
-          for(size_t i = snakeSize; i > 1; i--) {
-            snake[i - 1] = snake[i - 2];
-          }
-
-            // draw snake body
-          for(size_t i = 1; i < snakeSize; i++) {
-            DrawSnakeBodySegment(snake[i].x, snake[i].y);
-          }
-
-          if(snakeSize > 0) {
-            if(direction == UP) snake[0].y--;
-            if(direction == DOWN) snake[0].y++;
-            if(direction == LEFT) snake[0].x--;
-            if(direction == RIGHT) snake[0].x++;
-            if(snake[0].x >= (WINDOW_WIDTH / TILE_SIZE)) snake[0].x = 0;
-            if(snake[0].y >= (WINDOW_HEIGHT / TILE_SIZE)) snake[0].y = 0;
-            if(snake[0].x < 0) snake[0].x = (WINDOW_WIDTH / TILE_SIZE) - 1;
-            if(snake[0].y < 0) snake[0].y = (WINDOW_HEIGHT / TILE_SIZE) - 1;
-
-            for(size_t i = 1; i < snakeSize; i++) {
-              if((snake[0].x == snake[i].x) && (snake[0].y == snake[i].y)) {
-                printf("You died.\n");
-                game->resetGame();
-                break;
-              }
-            }
-
-            // draw snake head
-            DrawSnakeHead(snake[0].x, snake[0].y);
-          }
-
-          SDL_RenderPresent(renderer);
-
-          // if(snakeSize >= (WINDOW_WIDTH / TILE_SIZE) * (WINDOW_HEIGHT / TILE_SIZE)) {
-          if(snakeSize >= 200) {
-            printf("You won!\n");
-            game->resetGame(); }
-          SDL_Delay(90);
-          return SDL_APP_CONTINUE;
-    }
+            // if(snakeSize >= (WINDOW_WIDTH / TILE_SIZE) * (WINDOW_HEIGHT / TILE_SIZE)) {
+            if(snakeSize >= 200) {
+                printf("You won!\n");
+                game->resetGame(); }
+            SDL_Delay(90);
+            return SDL_APP_CONTINUE;
+        }
 
 
 
-    void appQuit(void) {
+        void appQuit(void) {
 
-        free(snake);
-        free(food);
-    }
+            free(snake);
+            free(food);
+        }
 
 
 
-};
+        };
 
 SDL_AppResult SDL_AppInit(void **appstate, int, char *[]) {
 
