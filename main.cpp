@@ -64,6 +64,10 @@ class Snake {
             return size;
         }
 
+        const SDL_Point& Segment(size_t index) const {
+            return segments[index];
+        }
+
         void SetDirection(int newDirection) {
             direction = newDirection;
         }
@@ -352,13 +356,27 @@ class Game {
             SDL_RenderTexture(renderer, textureSnakeLength, NULL, &dst);
         }
 
+        void RenderSnake() {
+            SDL_Point mSeg;
 
-        void DrawSnakeBodySegment(int32_t game_x, int32_t game_y) {
+            if (mSnake.Size() > 0) {
+
+                // draw snake body
+                for(size_t i = 1; i < mSnake.Size(); i++) {
+                    mSeg = mSnake.Segment(i);
+                    RenderSnakeBodySegment(mSeg.x, mSeg.y);
+                }
+                // draw snake head
+                mSeg = mSnake.Segment(0);
+                RenderSnakeHead(mSeg.x, mSeg.y);
+            }
+        }
+        void RenderSnakeBodySegment(int32_t game_x, int32_t game_y) {
             SDL_SetRenderDrawColor(renderer, 180, 50, 50, SDL_ALPHA_OPAQUE);
             DrawCircle(game_x, game_y, true, TILE_SIZE - 4);
         }
 
-        void DrawSnakeHead(int32_t game_x, int32_t game_y) {
+        void RenderSnakeHead(int32_t game_x, int32_t game_y) {
             // std::string debug = std::format("DrawSnakeHead() game_x: {}   game_y: {}\n", game_x, game_y);
             // printf("%s", debug.c_str());
             SDL_SetRenderDrawColor(renderer, 255, 165, 0, SDL_ALPHA_OPAQUE);
@@ -635,15 +653,8 @@ class Game {
                 SDL_RenderFillRect(renderer, &drawRect);
             }
 
+            RenderSnake();
 
-            if (mSnake.Size() > 0) {
-                // draw snake body
-                for(size_t i = 1; i < mSnake.Size(); i++) {
-                    DrawSnakeBodySegment(mSnake.segments[i].x, mSnake.segments[i].y);
-                }
-                // draw snake head
-                DrawSnakeHead(mSnake.segments[0].x, mSnake.segments[0].y);
-            }
 
             if (isPaused) {
                 ShowPaused();
