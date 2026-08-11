@@ -1,5 +1,6 @@
 #include <SDL3/SDL_init.h>
 #include <SDL3/SDL_pixels.h>
+#include <SDL3/SDL_render.h>
 #include <SDL3_ttf/SDL_textengine.h>
 #include <SDL3_ttf/SDL_ttf.h>
 
@@ -43,6 +44,13 @@ class Game {
     static constexpr const char* fontBitcountSingle = "BitcountSingle-VariableFont_CRSV,ELSH,ELXP,slnt,wght.ttf";
     static constexpr const char* fontSixtyfourConvergence = "SixtyfourConvergence-Regular-VariableFont_BLED,SCAN,XELA,YELA.ttf";
     static constexpr const char* fontWorkbenchRegular = "Workbench-Regular-VariableFont_BLED,SCAN.ttf";
+
+    // fixed game textures
+    SDL_Texture *textureGamePaused;
+    SDL_Texture *textureYouWon;
+    SDL_Texture *textureYouLost;
+
+
     SDL_Point randomTile() {
         return (SDL_Point){rand() % (WINDOW_WIDTH / TILE_SIZE - 1),
                rand() % (WINDOW_HEIGHT / TILE_SIZE - 1)};
@@ -50,11 +58,23 @@ class Game {
     
     public:
         Game()
-            : renderer (nullptr),
-                window (nullptr),
-                font(nullptr),
-                isPaused(false),
-                snakeSize(0)
+      : grow(false),
+        isPaused(false),
+        wins(0),
+        losses(0),
+        direction(UP),
+        snakeSize(0),
+        snakeCap(0),
+        foodSize(0),
+        foodCap(0),
+        snake(nullptr),
+        food(nullptr),
+        window(nullptr),
+        renderer(nullptr),
+        font(nullptr),
+        textureGamePaused(nullptr),
+        textureYouWon(nullptr),
+        textureYouLost(nullptr)
         {
         }
 
@@ -83,6 +103,25 @@ class Game {
           foodSize++;
         }
 
+        void ShowPaused() {
+            int w = 0, h = 0;
+            SDL_FRect dst;
+            const float scale = 4.0f;
+
+
+            SDL_GetRenderOutputSize(renderer, &w, &h);
+            SDL_SetRenderScale(renderer, scale, scale);
+            SDL_GetTextureSize(textureGamePaused, &dst.w, &dst.h);
+            dst.x = ((w / scale) - dst.w) / 2;
+            dst.y = ((h / scale) - dst.h) / 2;
+
+            /* Draw the text */
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+//            SDL_RenderClear(renderer);
+            SDL_RenderTexture(renderer, textureGamePaused, NULL, &dst);
+
+
+        }
 
         void DrawSnakeBodySegment(int32_t game_x, int32_t game_y) {
             SDL_SetRenderDrawColor(renderer, 180, 50, 50, SDL_ALPHA_OPAQUE);
@@ -218,31 +257,54 @@ class Game {
 
             Game *game = static_cast<Game *>(*appstate);
 
+            SDL_Color color = { 255, 255, 255, SDL_ALPHA_OPAQUE };
+            SDL_Surface *text;
+
             if(!SDL_Init(SDL_INIT_VIDEO)) {
                 SDL_Log("Couldn't initialize SDL: %s", SDL_GetError());
                 return SDL_APP_FAILURE;
-              }
+            }
 
 
-           if(!SDL_CreateWindowAndRenderer("Snake", WINDOW_WIDTH, WINDOW_HEIGHT, 0,
-                                               &window, &renderer)) {
+            if(!SDL_CreateWindowAndRenderer("Snake", WINDOW_WIDTH, WINDOW_HEIGHT, 0,
+                        &window, &renderer)) {
                 SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
                 return SDL_APP_FAILURE;
-           }
-           SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+            }
+            SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
-           if (!TTF_Init()) {
+            if (!TTF_Init()) {
                 SDL_Log("Couldn't initialize SDL_ttf: %s\n", SDL_GetError());
                 return SDL_APP_FAILURE;
             }
 
-            fs::path fullPath = fontDirectory;
-           fullPath /= fontBitCountGridDouble;
+            std::filesystem::path fullPath = fontDirectory;
+            fullPath /= fontBitCountGridDouble;
+
+            std::string fontPath = fullPath.string();
+            font = TTF_OpenFont(fontPath.c_str(), 22);
+
+            if (!font) {
+                SDL_Log("Couldn't open font: %s\n", SDL_GetError());
+                return SDL_APP_FAILURE;
+            }
+
+
+            // setup static textures
+            //
+            text = TTF_RenderText_Blended(font, "Game Paused.  Hit 'C' to continue.", 0, color); 
+            if (text) {
+                textureGamePaused = SDL_CreateTextureFromSurface(renderer, text);
+                SDL_DestroySurface(text);
+            }
+            if (!textureGamePaused) {
+                SDL_Log("Couldn't create text: %s\n", SDL_GetError());
+                return SDL_APP_FAILURE;
+            }
 
 
 
 
-           // font = TTF_OpenFont(const char *file, 22)
 
             drawRect.w = drawRect.h = TILE_SIZE;
             srand(time(NULL));
@@ -263,36 +325,36 @@ class Game {
                     switch (event->key.scancode) {
                         case SDL_SCANCODE_ESCAPE:
                         case SDL_SCANCODE_Q:
-                          return SDL_APP_SUCCESS;
+                            return SDL_APP_SUCCESS;
                         case SDL_SCANCODE_P:
-                          // return SDL_APP_SUCCESS;
-                          isPaused = true;
-                          break;
+                            // return SDL_APP_SUCCESS;
+                            isPaused = true;
+                            break;
                         case SDL_SCANCODE_C:
-                          if (isPaused)
-                              isPaused = false;
-                          break;
+                            if (isPaused)
+                                isPaused = false;
+                            break;
                         case SDL_SCANCODE_W:
                         case SDL_SCANCODE_UP:
-                          direction = UP;
-                          break;
+                            direction = UP;
+                            break;
                         case SDL_SCANCODE_S:
                         case SDL_SCANCODE_DOWN:
-                          direction = DOWN;
-                          break;
+                            direction = DOWN;
+                            break;
                         case SDL_SCANCODE_A:
                         case SDL_SCANCODE_LEFT:
-                          direction = LEFT;
-                          break;
+                            direction = LEFT;
+                            break;
                         case SDL_SCANCODE_D:
                         case SDL_SCANCODE_RIGHT:
-                          direction = RIGHT;
-                          break;
+                            direction = RIGHT;
+                            break;
                         case SDL_SCANCODE_E:
-                          game->resetGame();
-                          break;
+                            game->resetGame();
+                            break;
                         default:
-                          break;
+                            break;
                     }
                     break;
                 default:
@@ -303,8 +365,10 @@ class Game {
 
         SDL_AppResult Iterate(void *appstate) {
 
-            if (isPaused)
+            if (isPaused) {
+                ShowPaused();
                 return SDL_APP_CONTINUE;
+            }
 
 
             Game *game = static_cast<Game *>(appstate);
