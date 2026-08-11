@@ -29,8 +29,107 @@ using namespace std;
 #define RIGHT 3
 
 
+class Snake {
+    size_t size;
+    int direction;
+    size_t capacity;
+
+    public:
+        Snake() 
+            : size(0),
+            direction(1),
+            capacity(0),
+            segments(nullptr)
+        {
+        }
+
+        SDL_Point *segments;
+
+        void Reset(SDL_Point point) {
+            size = 0;
+            direction = rand()%4;
+            std::string debug = std::format("pointx: {}    Pointy: {}\n", point.x, point.y);
+            printf("%s", debug.c_str());
+            addToSnake(point);
+            debug = std::format("Snake size: {} segments[0].x: {} segments[0].y: {} direction: {}\n", 
+                    size, segments[0].x, segments[0].y, direction);
+            printf("%s", debug.c_str());
+        }
+
+        int GetDirection() {
+            return direction;
+        }
+
+        size_t Size() {
+            return size;
+        }
+
+        void SetDirection(int newDirection) {
+            direction = newDirection;
+        }
+
+        // mSnake.addToSnake(snake[snakeSize - 1]);
+        
+
+        // void addToSnake(SDL_Point point) {
+        void addToSnake(SDL_Point point) {
+            if(size == capacity)  {
+                size_t newCap = (capacity == 0) ? 1 : capacity * 2;
+                SDL_Point *tmp_snake = (SDL_Point *)realloc(segments, newCap * sizeof(SDL_Point));
+                if(tmp_snake == NULL) {
+                    // get out of here gracefully
+                    exit(1);
+                }
+                segments = tmp_snake;
+                capacity = newCap;
+            }
+          segments[size] = point;
+          size++;
+
+
+        }
+
+
+        bool MoveSnake( int boardWidth, int boardHeight) {
+
+
+            bool isAlive = true;
+
+            std::string debug = std::format("SnakeMove() size: {} segments[0].x: {} segments[0].y: {} direction: {}\n", 
+                    size, segments[0].x, segments[0].y, direction);
+            // printf("%s", debug.c_str());
+            // calculate new positions for snake body
+            // this is follow the leader
+            for(size_t i = size; i > 1; i--) {
+                segments[i - 1] = segments[i - 2];
+            }
+
+            // calculate new position for snake head
+            if(size > 0) {
+                if(direction == UP) segments[0].y--;
+                if(direction == DOWN) segments[0].y++;
+                if(direction == LEFT) segments[0].x--;
+                if(direction == RIGHT) segments[0].x++;
+                if(segments[0].x >= (boardWidth)) segments[0].x = 0;
+                if(segments[0].y >= (boardHeight)) segments[0].y = 0;
+                if(segments[0].x < 0) segments[0].x = (boardWidth) - 1;
+                if(segments[0].y < 0) segments[0].y = (boardHeight) - 1;
+
+                for(size_t i = 1; i < size; i++) {
+                    if((segments[0].x == segments[i].x) && (segments[0].y == segments[i].y)) {
+                        isAlive = false;
+                        break;
+                    }
+                }
+
+            }
+            return isAlive;
+        }
+}; 
+
 
 class Game {
+    Snake mSnake;
     bool grow;
     bool isPaused;
     bool isGameLost;
@@ -90,43 +189,39 @@ class Game {
             textureGamePaused(nullptr),
             textureYouWon(nullptr),
             textureYouLost(nullptr),
-            BOARD_WIDTH_TILES(0),
-            BOARD_HEIGHT_TILES(0)
+            BOARD_WIDTH_TILES(WINDOW_WIDTH / TILE_SIZE),
+            BOARD_HEIGHT_TILES((WINDOW_HEIGHT - SCOREBOARD_HEIGHT) / TILE_SIZE)
         {
-            BOARD_WIDTH_TILES = WINDOW_WIDTH / TILE_SIZE;
-            BOARD_HEIGHT_TILES = (WINDOW_HEIGHT - SCOREBOARD_HEIGHT) / TILE_SIZE;
         }
 
         void resetGame() {
-          snakeSize = foodSize = 0;
-          addToSnake(randomTile());
-          for(int f = 0; f < (rand() % 4) + 3; f++) addToFood(randomTile());
-          grow = false;
-          direction = (rand() % 4);
+            foodSize = 0;
+            for(int f = 0; f < (rand() % 4) + 3; f++) addToFood(randomTile());
+            mSnake.Reset(randomTile());
         }
 
         void addToFood(SDL_Point point) {
-          if(foodSize == foodCap) {
-            size_t newCap = (foodCap == 0) ? 1 : foodCap * 2;
-            SDL_Point *tmp_food =
-                (SDL_Point *)realloc(food, newCap * sizeof(SDL_Point));
-            if(tmp_food == NULL) {
-              free(snake);
-              free(food);
-              exit(1);
+            if(foodSize == foodCap) {
+                size_t newCap = (foodCap == 0) ? 1 : foodCap * 2;
+                SDL_Point *tmp_food =
+                    (SDL_Point *)realloc(food, newCap * sizeof(SDL_Point));
+                if(tmp_food == NULL) {
+                    free(snake);
+                    free(food);
+                    exit(1);
+                }
+                food = tmp_food;
+                foodCap = newCap;
             }
-            food = tmp_food;
-            foodCap = newCap;
-          }
-          food[foodSize] = point;
-          foodSize++;
+            food[foodSize] = point;
+            foodSize++;
         }
 
         void handleGameLost() {
             isGameLost = true;
 
-            if (snakeSize > highScore ) {
-                highScore = snakeSize;
+            if (mSnake.Size()  > highScore ) {
+                highScore = mSnake.Size();
                 ComposeScoreboardText();
             }
         }
@@ -171,10 +266,12 @@ class Game {
         }
 
         void ComposeScoreboardText() {
+
+            printf("inisde ComposeScoreboardText()\n");
         
             SDL_Color color = { 255, 255, 255, SDL_ALPHA_OPAQUE };
             SDL_Surface *text;
-            std::string snakeBanner = std::format("Snake Length : {}               High score : {}", snakeSize, highScore);
+            std::string snakeBanner = std::format("Score : {}                  High score : {}", mSnake.Size()-1, highScore);
 
             text = TTF_RenderText_Blended(font, snakeBanner.c_str(), 0, color); 
             if (text) {
@@ -255,6 +352,8 @@ class Game {
         }
 
         void DrawSnakeHead(int32_t game_x, int32_t game_y) {
+            // std::string debug = std::format("DrawSnakeHead() game_x: {}   game_y: {}\n", game_x, game_y);
+            // printf("%s", debug.c_str());
             SDL_SetRenderDrawColor(renderer, 255, 165, 0, SDL_ALPHA_OPAQUE);
             DrawCircle(game_x, game_y, true, TILE_SIZE);
 
@@ -267,7 +366,7 @@ class Game {
             int32_t mouthEndX = centreX;
             int32_t mouthEndY = centreY;
 
-            switch (direction) {
+            switch (mSnake.GetDirection()) {
                 case UP:
                     eyeX -= 3;
                     eyeY -= 3;
@@ -361,25 +460,6 @@ class Game {
         }
 
 
-        void addToSnake(SDL_Point point) {
-            if(snakeSize == snakeCap) {
-                size_t newCap = (snakeCap == 0) ? 1 : snakeCap * 2;
-                SDL_Point *tmp_snake = (SDL_Point *)realloc(snake, newCap * sizeof(SDL_Point));
-                if(tmp_snake == NULL) {
-                    free(snake);
-                    free(food);
-                    exit(1);
-                }
-                snake = tmp_snake;
-                snakeCap = newCap;
-            }
-          snake[snakeSize] = point;
-          snakeSize++;
-
-
-          ComposeScoreboardText();
-
-        }
 
         SDL_AppResult AppInit(void **appstate) {
 
@@ -450,12 +530,14 @@ class Game {
                 return SDL_APP_FAILURE;
             }
             
-            ComposeScoreboardText();
 
             drawRect.w = drawRect.h = TILE_SIZE;
             srand(time(NULL));
 
+            printf("Calling resetGame() from Game init()\n");
             game->resetGame();
+
+            ComposeScoreboardText();
 
             return SDL_APP_CONTINUE;
 
@@ -483,19 +565,19 @@ class Game {
                             break;
                         case SDL_SCANCODE_W:
                         case SDL_SCANCODE_UP:
-                            direction = UP;
+                            mSnake.SetDirection(UP);
                             break;
                         case SDL_SCANCODE_S:
                         case SDL_SCANCODE_DOWN:
-                            direction = DOWN;
+                            mSnake.SetDirection(DOWN);
                             break;
                         case SDL_SCANCODE_A:
                         case SDL_SCANCODE_LEFT:
-                            direction = LEFT;
+                            mSnake.SetDirection(LEFT);
                             break;
                         case SDL_SCANCODE_D:
                         case SDL_SCANCODE_RIGHT:
-                            direction = RIGHT;
+                            mSnake.SetDirection(RIGHT);
                             break;
                         case SDL_SCANCODE_E:
                             game->resetGame();
@@ -517,40 +599,21 @@ class Game {
             if (!isPaused && !isGameLost) {
                 // food logic...is snake head on food?
                 for(size_t i = 0; i < foodSize; i++) {
-                    if((snakeSize > 0) && (food[i].x == snake[0].x) &&
-                            (food[i].y == snake[0].y)) {
-                        addToSnake(snake[snakeSize - 1]);
+                    if((mSnake.Size() > 0) && (food[i].x == mSnake.segments[0].x) &&
+                            (food[i].y == mSnake.segments[0].y)) {
+                        mSnake.addToSnake(mSnake.segments[mSnake.Size()-1]);
+                      // mSnake.addToSnake(snake[snakeSize - 1]);
                         // grow faster for testing
                         //addToSnake(snake[snakeSize - 1]);
+                        ComposeScoreboardText();
                         dropFood(i);
                     }
                 }
 
-                // calculate new positions for snake body
-                // this is follow the leader
-                for(size_t i = snakeSize; i > 1; i--) {
-                    snake[i - 1] = snake[i - 2];
+                if (!mSnake.MoveSnake(BOARD_WIDTH_TILES,BOARD_HEIGHT_TILES)) {
+                    handleGameLost();
                 }
 
-                // calculate new position for snake head
-                if(snakeSize > 0) {
-                    if(direction == UP) snake[0].y--;
-                    if(direction == DOWN) snake[0].y++;
-                    if(direction == LEFT) snake[0].x--;
-                    if(direction == RIGHT) snake[0].x++;
-                    if(snake[0].x >= (BOARD_WIDTH_TILES)) snake[0].x = 0;
-                    if(snake[0].y >= (BOARD_HEIGHT_TILES)) snake[0].y = 0;
-                    if(snake[0].x < 0) snake[0].x = (BOARD_WIDTH_TILES) - 1;
-                    if(snake[0].y < 0) snake[0].y = (BOARD_HEIGHT_TILES) - 1;
-
-                    for(size_t i = 1; i < snakeSize; i++) {
-                        if((snake[0].x == snake[i].x) && (snake[0].y == snake[i].y)) {
-                            handleGameLost();
-                            break;
-                        }
-                    }
-
-                }
             }
 
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
@@ -565,13 +628,13 @@ class Game {
             }
 
 
-            if (snakeSize > 0) {
+            if (mSnake.Size() > 0) {
                 // draw snake body
-                for(size_t i = 1; i < snakeSize; i++) {
-                    DrawSnakeBodySegment(snake[i].x, snake[i].y);
+                for(size_t i = 1; i < mSnake.Size(); i++) {
+                    DrawSnakeBodySegment(mSnake.segments[i].x, mSnake.segments[i].y);
                 }
                 // draw snake head
-                DrawSnakeHead(snake[0].x, snake[0].y);
+                DrawSnakeHead(mSnake.segments[0].x, mSnake.segments[0].y);
             }
 
             if (isPaused) {
