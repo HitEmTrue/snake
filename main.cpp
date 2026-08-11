@@ -18,11 +18,6 @@
 
 using namespace std;
 
-
-//#define WINDOW_WIDTH 640
-//#define WINDOW_HEIGHT 480
-//#define TILE_SIZE 20
-
 #define UP 0
 #define DOWN 1
 #define LEFT 2
@@ -42,6 +37,11 @@ class Snake {
             segments(nullptr)
         {
         }
+
+        ~Snake() {
+            free(segments);
+        }
+
 
         SDL_Point *segments;
 
@@ -68,10 +68,6 @@ class Snake {
             direction = newDirection;
         }
 
-        // mSnake.addToSnake(snake[snakeSize - 1]);
-        
-
-        // void addToSnake(SDL_Point point) {
         void addToSnake(SDL_Point point) {
             if(size == capacity)  {
                 size_t newCap = (capacity == 0) ? 1 : capacity * 2;
@@ -133,11 +129,11 @@ class Game {
     bool grow;
     bool isPaused;
     bool isGameLost;
+    size_t score;
     size_t highScore;
     int losses;
-    int direction;
-    size_t snakeSize, snakeCap, foodSize, foodCap;
-    SDL_Point *snake, *food;
+    size_t foodSize, foodCap;
+    SDL_Point *food;
     SDL_FRect drawRect;
     SDL_Window *window;
     SDL_Renderer *renderer;
@@ -174,14 +170,11 @@ class Game {
           : grow(false),
             isPaused(false),
             isGameLost(false),
+            score(0),
             highScore(0),
             losses(0),
-            direction(UP),
-            snakeSize(0),
-            snakeCap(0),
             foodSize(0),
             foodCap(0),
-            snake(nullptr),
             food(nullptr),
             window(nullptr),
             renderer(nullptr),
@@ -194,7 +187,12 @@ class Game {
         {
         }
 
+        ~Game() {
+            free(food);
+        }
+
         void resetGame() {
+            score = 0;
             foodSize = 0;
             for(int f = 0; f < (rand() % 4) + 3; f++) addToFood(randomTile());
             mSnake.Reset(randomTile());
@@ -206,7 +204,6 @@ class Game {
                 SDL_Point *tmp_food =
                     (SDL_Point *)realloc(food, newCap * sizeof(SDL_Point));
                 if(tmp_food == NULL) {
-                    free(snake);
                     free(food);
                     exit(1);
                 }
@@ -220,8 +217,8 @@ class Game {
         void handleGameLost() {
             isGameLost = true;
 
-            if (mSnake.Size()  > highScore ) {
-                highScore = mSnake.Size();
+            if (score > highScore ) {
+                highScore = score;
                 ComposeScoreboardText();
             }
         }
@@ -249,9 +246,9 @@ class Game {
                 if (isCollision)
                     continue;
 
-                if (snakeSize > 0) {
-                    for(size_t i = 0; i < snakeSize; i++) {
-                        if((snake[i].x == potentialFood.x) && (snake[i].y == potentialFood.y)) {
+                if (mSnake.Size() > 0) {
+                    for(size_t i = 0; i < mSnake.Size(); i++) {
+                        if((mSnake.segments[i].x == potentialFood.x) && (mSnake.segments[i].y == potentialFood.y)) {
                             isCollision = true;
                             printf("food on snake prevented\n");
                         }
@@ -271,9 +268,9 @@ class Game {
         
             SDL_Color color = { 255, 255, 255, SDL_ALPHA_OPAQUE };
             SDL_Surface *text;
-            std::string snakeBanner = std::format("Score : {}                  High score : {}", mSnake.Size()-1, highScore);
-
-            text = TTF_RenderText_Blended(font, snakeBanner.c_str(), 0, color); 
+            std::string banner = std::format("Score : {}                  High score : {}", score, highScore);
+            
+            text = TTF_RenderText_Blended(font, banner.c_str(), 0, color); 
             if (text) {
                 textureSnakeLength = SDL_CreateTextureFromSurface(renderer, text);
                 SDL_DestroySurface(text);
@@ -324,9 +321,19 @@ class Game {
         }
         
         void RenderScoreboard() {
+
+            SDL_FRect border;
+            border.x = 0;
+            border.y = 0;
+            border.h = WINDOW_HEIGHT - SCOREBOARD_HEIGHT;
+            border.w = WINDOW_WIDTH;
+
+
             SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-            SDL_RenderLine(renderer, 0, WINDOW_HEIGHT - SCOREBOARD_HEIGHT + 1, WINDOW_WIDTH, WINDOW_HEIGHT - SCOREBOARD_HEIGHT + 1);
-            
+//            SDL_RenderLine(renderer, 0, WINDOW_HEIGHT - SCOREBOARD_HEIGHT + 1, WINDOW_WIDTH, WINDOW_HEIGHT - SCOREBOARD_HEIGHT + 1);
+            SDL_RenderRect(renderer, &border);
+
+
 
             int w = 0, h = 0;
             SDL_FRect dst;
@@ -602,9 +609,10 @@ class Game {
                     if((mSnake.Size() > 0) && (food[i].x == mSnake.segments[0].x) &&
                             (food[i].y == mSnake.segments[0].y)) {
                         mSnake.addToSnake(mSnake.segments[mSnake.Size()-1]);
-                      // mSnake.addToSnake(snake[snakeSize - 1]);
                         // grow faster for testing
-                        //addToSnake(snake[snakeSize - 1]);
+                        // mSnake.addToSnake(mSnake.segments[mSnake.Size()-1]);
+
+                        score++;
                         ComposeScoreboardText();
                         dropFood(i);
                     }
@@ -648,25 +656,15 @@ class Game {
 
             SDL_RenderPresent(renderer);
 
-            // if(snakeSize >= (WINDOW_WIDTH / TILE_SIZE) * (WINDOW_HEIGHT / TILE_SIZE)) {
-            if(snakeSize >= 200) {
+            // if(mSnake.Size() >= (WINDOW_WIDTH / TILE_SIZE) * (WINDOW_HEIGHT / TILE_SIZE)) {
+            if(mSnake.Size() >= 200) {
                 printf("You won!\n");
                 game->resetGame(); }
             SDL_Delay(90);
             return SDL_APP_CONTINUE;
         }
 
-
-
-        void appQuit(void) {
-
-            free(snake);
-            free(food);
-        }
-
-
-
-        };
+};
 
 SDL_AppResult SDL_AppInit(void **appstate, int, char *[]) {
 
@@ -689,6 +687,5 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 
 void SDL_AppQuit(void *appstate, SDL_AppResult) {
 
-  static_cast<Game*>(appstate)->appQuit();
-
+    delete static_cast<Game*>(appstate);
 }
