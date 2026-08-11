@@ -1,6 +1,7 @@
 #include <SDL3/SDL_init.h>
 #include <SDL3/SDL_pixels.h>
 #include <SDL3/SDL_render.h>
+#include <SDL3/SDL_scancode.h>
 #include <SDL3_ttf/SDL_textengine.h>
 #include <SDL3_ttf/SDL_ttf.h>
 
@@ -13,11 +14,14 @@
 #include <stdlib.h>
 #include <time.h>
 #include <filesystem>
+#include <format>
+
+using namespace std;
 
 
-#define WINDOW_WIDTH 640
-#define WINDOW_HEIGHT 480
-#define TILE_SIZE 20
+//#define WINDOW_WIDTH 640
+//#define WINDOW_HEIGHT 480
+//#define TILE_SIZE 20
 
 #define UP 0
 #define DOWN 1
@@ -29,7 +33,8 @@
 class Game {
     bool grow;
     bool isPaused;
-    int wins;
+    bool isGameLost;
+    size_t highScore;
     int losses;
     int direction;
     size_t snakeSize, snakeCap, foodSize, foodCap;
@@ -49,18 +54,28 @@ class Game {
     SDL_Texture *textureGamePaused;
     SDL_Texture *textureYouWon;
     SDL_Texture *textureYouLost;
+    SDL_Texture *textureSnakeLength;
+
+    static constexpr int WINDOW_WIDTH = 640;
+    static constexpr int WINDOW_HEIGHT = 480;
+    static constexpr int TILE_SIZE = 20;
+    
+    static constexpr int SCOREBOARD_HEIGHT = 60;
+    int BOARD_WIDTH_TILES;
+    int BOARD_HEIGHT_TILES;
 
 
     SDL_Point randomTile() {
-        return (SDL_Point){rand() % (WINDOW_WIDTH / TILE_SIZE - 1),
-               rand() % (WINDOW_HEIGHT / TILE_SIZE - 1)};
+        return (SDL_Point){rand() % (BOARD_WIDTH_TILES - 1),
+               rand() % (BOARD_HEIGHT_TILES - 1)};
     }
     
     public:
         Game()
           : grow(false),
             isPaused(false),
-            wins(0),
+            isGameLost(false),
+            highScore(0),
             losses(0),
             direction(UP),
             snakeSize(0),
@@ -74,8 +89,12 @@ class Game {
             font(nullptr),
             textureGamePaused(nullptr),
             textureYouWon(nullptr),
-            textureYouLost(nullptr)
+            textureYouLost(nullptr),
+            BOARD_WIDTH_TILES(0),
+            BOARD_HEIGHT_TILES(0)
         {
+            BOARD_WIDTH_TILES = WINDOW_WIDTH / TILE_SIZE;
+            BOARD_HEIGHT_TILES = (WINDOW_HEIGHT - SCOREBOARD_HEIGHT) / TILE_SIZE;
         }
 
         void resetGame() {
@@ -103,18 +122,70 @@ class Game {
           foodSize++;
         }
 
-        void dropFood(size_t foodIndex) {
-            food[foodIndex] = randomTile();
-            
-//            if (snakeSize > 0) {
-//                // draw snake body
-//                for(size_t i = 1; i < snakeSize; i++) {
-//                    DrawSnakeBodySegment(snake[i].x, snake[i].y);
-//                }
-//                // draw snake head
-//               DrawSnakeHead(snake[0].x, snake[0].y);
-//            }
+        void handleGameLost() {
+            isGameLost = true;
+
+            if (snakeSize > highScore ) {
+                highScore = snakeSize;
+                ComposeScoreboardText();
+            }
         }
+
+
+        void dropFood(size_t foodIndex) {
+
+            bool foodLocationFound = false;
+            SDL_Point potentialFood;
+
+            while (!foodLocationFound) {
+                bool isCollision = false;
+
+                potentialFood = randomTile();
+
+                for(size_t i = 0; i < foodSize; i++) {
+                    if((food[i].x == potentialFood.x) &&
+                            (food[i].y == potentialFood.y)) {
+                        isCollision = true;
+                        printf("food double prevented\n");
+                    }
+                }
+
+                // no reason to check the snake...find another food candidate
+                if (isCollision)
+                    continue;
+
+                if (snakeSize > 0) {
+                    for(size_t i = 0; i < snakeSize; i++) {
+                        if((snake[i].x == potentialFood.x) && (snake[i].y == potentialFood.y)) {
+                            isCollision = true;
+                            printf("food on snake prevented\n");
+                        }
+                    }
+                }
+
+                if (!isCollision)
+                    foodLocationFound = true;
+            }
+
+            food[foodIndex] = potentialFood;
+        }
+
+        void ComposeScoreboardText() {
+        
+            SDL_Color color = { 255, 255, 255, SDL_ALPHA_OPAQUE };
+            SDL_Surface *text;
+            std::string snakeBanner = std::format("Snake Length : {}               High score : {}", snakeSize, highScore);
+
+            text = TTF_RenderText_Blended(font, snakeBanner.c_str(), 0, color); 
+            if (text) {
+                textureSnakeLength = SDL_CreateTextureFromSurface(renderer, text);
+                SDL_DestroySurface(text);
+            }
+            if (!textureSnakeLength) {
+                SDL_Log("Couldn't create text: %s\n", SDL_GetError());
+            }
+        }
+
 
         void ShowPaused() {
             int w = 0, h = 0;
@@ -135,6 +206,48 @@ class Game {
 
 
         }
+        void ShowYouLost() {
+            int w = 0, h = 0;
+            SDL_FRect dst;
+            const float scale = 1.0f;
+
+
+            SDL_GetRenderOutputSize(renderer, &w, &h);
+            SDL_SetRenderScale(renderer, scale, scale);
+            SDL_GetTextureSize(textureYouLost, &dst.w, &dst.h);
+            dst.x = ((w / scale) - dst.w) / 2;
+            dst.y = ((h / scale) - dst.h) / 2;
+
+            /* Draw the text */
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+//            SDL_RenderClear(renderer);
+            SDL_RenderTexture(renderer, textureYouLost, NULL, &dst);
+
+
+        }
+        
+        void RenderScoreboard() {
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+            SDL_RenderLine(renderer, 0, WINDOW_HEIGHT - SCOREBOARD_HEIGHT + 1, WINDOW_WIDTH, WINDOW_HEIGHT - SCOREBOARD_HEIGHT + 1);
+            
+
+            int w = 0, h = 0;
+            SDL_FRect dst;
+            const float scale = 1.0f;
+
+            dst.x = 5;
+            dst.y = WINDOW_HEIGHT - SCOREBOARD_HEIGHT + 4;
+
+            SDL_GetRenderOutputSize(renderer, &w, &h);
+            SDL_SetRenderScale(renderer, scale, scale);
+            SDL_GetTextureSize(textureSnakeLength, &dst.w, &dst.h);
+
+            /* Draw the text */
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+//            SDL_RenderClear(renderer);
+            SDL_RenderTexture(renderer, textureSnakeLength, NULL, &dst);
+        }
+
 
         void DrawSnakeBodySegment(int32_t game_x, int32_t game_y) {
             SDL_SetRenderDrawColor(renderer, 180, 50, 50, SDL_ALPHA_OPAQUE);
@@ -262,6 +375,10 @@ class Game {
             }
           snake[snakeSize] = point;
           snakeSize++;
+
+
+          ComposeScoreboardText();
+
         }
 
         SDL_AppResult AppInit(void **appstate) {
@@ -303,7 +420,7 @@ class Game {
 
             // setup static textures
             //
-            text = TTF_RenderText_Blended(font, "Game Paused.  Hit 'C' to continue.", 0, color); 
+            text = TTF_RenderText_Blended(font, "Game Paused.  SPACE to continue.", 0, color); 
             if (text) {
                 textureGamePaused = SDL_CreateTextureFromSurface(renderer, text);
                 SDL_DestroySurface(text);
@@ -313,9 +430,27 @@ class Game {
                 return SDL_APP_FAILURE;
             }
 
+            text = TTF_RenderText_Blended(font, "Game Over.  SPACE to New Game.", 0, color); 
+            if (text) {
+                textureYouLost = SDL_CreateTextureFromSurface(renderer, text);
+                SDL_DestroySurface(text);
+            }
+            if (!textureYouLost) {
+                SDL_Log("Couldn't create text: %s\n", SDL_GetError());
+                return SDL_APP_FAILURE;
+            }
 
-
-
+            text = TTF_RenderText_Blended(font, "You Won!  SPACE to New Game.", 0, color); 
+            if (text) {
+                textureYouWon = SDL_CreateTextureFromSurface(renderer, text);
+                SDL_DestroySurface(text);
+            }
+            if (!textureYouWon) {
+                SDL_Log("Couldn't create text: %s\n", SDL_GetError());
+                return SDL_APP_FAILURE;
+            }
+            
+            ComposeScoreboardText();
 
             drawRect.w = drawRect.h = TILE_SIZE;
             srand(time(NULL));
@@ -337,13 +472,14 @@ class Game {
                         case SDL_SCANCODE_ESCAPE:
                         case SDL_SCANCODE_Q:
                             return SDL_APP_SUCCESS;
-                        case SDL_SCANCODE_P:
-                            // return SDL_APP_SUCCESS;
-                            isPaused = true;
-                            break;
-                        case SDL_SCANCODE_C:
-                            if (isPaused)
-                                isPaused = false;
+                        case SDL_SCANCODE_SPACE:
+                            if (isGameLost) {
+                                isGameLost = false;
+                                resetGame();
+                            }
+                            else {
+                                isPaused = !isPaused;
+                            }
                             break;
                         case SDL_SCANCODE_W:
                         case SDL_SCANCODE_UP:
@@ -378,12 +514,14 @@ class Game {
 
             Game *game = static_cast<Game *>(appstate);
 
-            if (!isPaused) {
+            if (!isPaused && !isGameLost) {
                 // food logic...is snake head on food?
                 for(size_t i = 0; i < foodSize; i++) {
                     if((snakeSize > 0) && (food[i].x == snake[0].x) &&
                             (food[i].y == snake[0].y)) {
                         addToSnake(snake[snakeSize - 1]);
+                        // grow faster for testing
+                        //addToSnake(snake[snakeSize - 1]);
                         dropFood(i);
                     }
                 }
@@ -400,15 +538,14 @@ class Game {
                     if(direction == DOWN) snake[0].y++;
                     if(direction == LEFT) snake[0].x--;
                     if(direction == RIGHT) snake[0].x++;
-                    if(snake[0].x >= (WINDOW_WIDTH / TILE_SIZE)) snake[0].x = 0;
-                    if(snake[0].y >= (WINDOW_HEIGHT / TILE_SIZE)) snake[0].y = 0;
-                    if(snake[0].x < 0) snake[0].x = (WINDOW_WIDTH / TILE_SIZE) - 1;
-                    if(snake[0].y < 0) snake[0].y = (WINDOW_HEIGHT / TILE_SIZE) - 1;
+                    if(snake[0].x >= (BOARD_WIDTH_TILES)) snake[0].x = 0;
+                    if(snake[0].y >= (BOARD_HEIGHT_TILES)) snake[0].y = 0;
+                    if(snake[0].x < 0) snake[0].x = (BOARD_WIDTH_TILES) - 1;
+                    if(snake[0].y < 0) snake[0].y = (BOARD_HEIGHT_TILES) - 1;
 
                     for(size_t i = 1; i < snakeSize; i++) {
                         if((snake[0].x == snake[i].x) && (snake[0].y == snake[i].y)) {
-                            printf("You died.\n");
-                            game->resetGame();
+                            handleGameLost();
                             break;
                         }
                     }
@@ -440,6 +577,11 @@ class Game {
             if (isPaused) {
                 ShowPaused();
             }
+            if (isGameLost) {
+                ShowYouLost();
+            }
+
+            RenderScoreboard();
 
             SDL_RenderPresent(renderer);
 
