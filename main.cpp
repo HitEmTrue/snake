@@ -24,6 +24,63 @@ using namespace std;
 #define RIGHT 3
 
 
+
+class Food {
+    size_t size;
+    size_t capacity;
+
+    public:
+        Food()
+            : size(0),
+            capacity(0),
+            foodStorage(nullptr)
+        {
+        }
+
+    
+        ~Food() {
+            free(foodStorage);
+        }
+
+        SDL_Point *foodStorage;
+
+        void Reset() {
+            size = 0;
+        }
+
+        size_t Size() {
+            return size;
+        }
+
+
+        int ContainsPoint(SDL_Point point ) {
+            size_t rValue = -1;
+            if (size > 0) {
+                for(size_t i = 0; i < size; i++) {
+                    if((foodStorage[i].x == point.x) && (foodStorage[i].y == point.y)) {
+                        rValue = i;
+                    }
+                }
+            }
+            return rValue;
+        }
+
+        void addToFood(SDL_Point point) {
+            if(size == capacity) {
+                size_t newCap = (capacity == 0) ? 1 : capacity * 2;
+                SDL_Point *tmp_food =
+                    (SDL_Point *)realloc(foodStorage, newCap * sizeof(SDL_Point));
+                if(tmp_food == NULL) {
+                    exit(1);
+                }
+                foodStorage = tmp_food;
+                capacity = newCap;
+            }
+            foodStorage[size] = point;
+            size++;
+        }
+};
+
 class Snake {
     size_t size;
     int direction;
@@ -48,12 +105,7 @@ class Snake {
         void Reset(SDL_Point point) {
             size = 0;
             direction = rand()%4;
-            std::string debug = std::format("pointx: {}    Pointy: {}\n", point.x, point.y);
-            printf("%s", debug.c_str());
             addToSnake(point);
-            debug = std::format("Snake size: {} segments[0].x: {} segments[0].y: {} direction: {}\n", 
-                    size, segments[0].x, segments[0].y, direction);
-            printf("%s", debug.c_str());
         }
 
         int GetDirection() {
@@ -125,11 +177,26 @@ class Snake {
             }
             return isAlive;
         }
+
+
+        bool ContainsPoint(SDL_Point point ) {
+            bool rValue = false;
+            if (size > 0) {
+                for(size_t i = 0; i < size; i++) {
+                    if((segments[i].x == point.x) && (segments[i].y == point.y)) {
+                        rValue = true;
+                        printf("food on snake prevented\n");
+                    }
+                }
+            }
+            return rValue;
+        }
 }; 
 
 
 class Game {
     Snake mSnake;
+    Food mFood;
     bool grow;
     bool isPaused;
     bool isGameLost;
@@ -177,10 +244,7 @@ class Game {
             score(0),
             highScore(0),
             losses(0),
-            foodSize(0),
-            foodCap(0),
             food(nullptr),
-            window(nullptr),
             renderer(nullptr),
             font(nullptr),
             textureGamePaused(nullptr),
@@ -192,30 +256,14 @@ class Game {
         }
 
         ~Game() {
-            free(food);
         }
 
         void resetGame() {
             score = 0;
-            foodSize = 0;
-            for(int f = 0; f < (rand() % 4) + 3; f++) addToFood(randomTile());
-            mSnake.Reset(randomTile());
-        }
+            mFood.Reset();
+            for(int f = 0; f < (rand() % 4) + 3; f++) mFood.addToFood(randomTile());
 
-        void addToFood(SDL_Point point) {
-            if(foodSize == foodCap) {
-                size_t newCap = (foodCap == 0) ? 1 : foodCap * 2;
-                SDL_Point *tmp_food =
-                    (SDL_Point *)realloc(food, newCap * sizeof(SDL_Point));
-                if(tmp_food == NULL) {
-                    free(food);
-                    exit(1);
-                }
-                food = tmp_food;
-                foodCap = newCap;
-            }
-            food[foodSize] = point;
-            foodSize++;
+            mSnake.Reset(randomTile());
         }
 
         void handleGameLost() {
@@ -227,49 +275,30 @@ class Game {
             }
         }
 
-
-        void dropFood(size_t foodIndex) {
+        void replaceFood(size_t foodIndex) {
 
             bool foodLocationFound = false;
             SDL_Point potentialFood;
 
             while (!foodLocationFound) {
-                bool isCollision = false;
 
                 potentialFood = randomTile();
 
-                for(size_t i = 0; i < foodSize; i++) {
-                    if((food[i].x == potentialFood.x) &&
-                            (food[i].y == potentialFood.y)) {
-                        isCollision = true;
-                        printf("food double prevented\n");
-                    }
-                }
-
-                // no reason to check the snake...find another food candidate
-                if (isCollision)
+                if (mFood.ContainsPoint(potentialFood) >= 0) {
+                    printf("food double prevented\n");
                     continue;
-
-                if (mSnake.Size() > 0) {
-                    for(size_t i = 0; i < mSnake.Size(); i++) {
-                        if((mSnake.segments[i].x == potentialFood.x) && (mSnake.segments[i].y == potentialFood.y)) {
-                            isCollision = true;
-                            printf("food on snake prevented\n");
-                        }
-                    }
                 }
 
-                if (!isCollision)
+                if (!mSnake.ContainsPoint(potentialFood)) {
                     foodLocationFound = true;
+                }
             }
 
-            food[foodIndex] = potentialFood;
+            mFood.foodStorage[foodIndex] = potentialFood;
         }
 
         void ComposeScoreboardText() {
 
-            printf("inisde ComposeScoreboardText()\n");
-        
             SDL_Color color = { 255, 255, 255, SDL_ALPHA_OPAQUE };
             SDL_Surface *text;
             std::string banner = std::format("Score : {}                  High score : {}", score, highScore);
@@ -623,17 +652,13 @@ class Game {
 
             if (!isPaused && !isGameLost) {
                 // food logic...is snake head on food?
-                for(size_t i = 0; i < foodSize; i++) {
-                    if((mSnake.Size() > 0) && (food[i].x == mSnake.segments[0].x) &&
-                            (food[i].y == mSnake.segments[0].y)) {
-                        mSnake.addToSnake(mSnake.segments[mSnake.Size()-1]);
-                        // grow faster for testing
-                        // mSnake.addToSnake(mSnake.segments[mSnake.Size()-1]);
-
-                        score++;
-                        ComposeScoreboardText();
-                        dropFood(i);
-                    }
+                SDL_Point mSeg = mSnake.Segment(0);
+                int xi = mFood.ContainsPoint(mSeg);
+                if (xi >= 0) {
+                    mSnake.addToSnake(mSnake.segments[mSnake.Size()-1]);
+                    score++;
+                    ComposeScoreboardText();
+                    replaceFood(static_cast<size_t>(xi));
                 }
 
                 if (!mSnake.MoveSnake(BOARD_WIDTH_TILES,BOARD_HEIGHT_TILES)) {
@@ -647,9 +672,9 @@ class Game {
 
             // draw food
             SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
-            for(size_t i = 0; i < foodSize; i++) {
-                drawRect.x = food[i].x * TILE_SIZE;
-                drawRect.y = food[i].y * TILE_SIZE;
+            for(size_t i = 0; i < mFood.Size(); i++) {
+                drawRect.x = mFood.foodStorage[i].x * TILE_SIZE;
+                drawRect.y = mFood.foodStorage[i].y * TILE_SIZE;
                 SDL_RenderFillRect(renderer, &drawRect);
             }
 
