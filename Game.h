@@ -64,6 +64,14 @@ class Game {
 
         ~Game();
 
+        int BoardWidth() const {
+                return BOARD_WIDTH_TILES;
+        }
+
+        int BoardHeight() const {
+            return BOARD_HEIGHT_TILES;
+        }
+
         void resetGame();
 
         void handleGameLost();

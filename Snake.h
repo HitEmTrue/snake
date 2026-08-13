@@ -8,6 +8,8 @@
 #include <filesystem>
 #include <format>
 
+class Game;
+
 using namespace std;
 
 
@@ -15,9 +17,10 @@ class Snake {
     size_t size;
     int direction;
     size_t capacity;
+    Game& mGame;
 
     public:
-        Snake(); 
+        Snake(Game& game); 
 
         ~Snake();
 
@@ -35,7 +38,7 @@ class Snake {
 
         void addToSnake(SDL_Point point);
 
-        bool MoveSnake( int boardWidth, int boardHeight);
+        bool MoveSnake();
 
         bool ContainsPoint(SDL_Point point );
 }; 

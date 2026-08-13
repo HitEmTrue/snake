@@ -13,10 +13,10 @@
 #include "Snake.h"
 #include "Food.h"
 
-
     
 Game::Game()
-            : isPaused(false),
+            : mSnake(*this),
+            isPaused(false),
             isGameLost(false),
             score(0),
             highScore(0),
@@ -434,7 +434,7 @@ SDL_AppResult Game::Iterate(void *) {
             replaceFood(static_cast<size_t>(xi));
         }
 
-        if (!mSnake.MoveSnake(BOARD_WIDTH_TILES,BOARD_HEIGHT_TILES)) {
+        if (!mSnake.MoveSnake()) {
             handleGameLost();
         }
 

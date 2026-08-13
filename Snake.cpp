@@ -13,11 +13,13 @@
 using namespace std;
 
 #include "Snake.h"
+#include "Game.h"
 
-Snake::Snake() 
+Snake::Snake(Game& game) 
     : size(0),
     direction(1),
     capacity(0),
+    mGame(game),
     segments(nullptr)
 {
 }
@@ -66,7 +68,7 @@ void Snake::addToSnake(SDL_Point point) {
 }
 
 
-bool Snake::MoveSnake( int boardWidth, int boardHeight) {
+bool Snake::MoveSnake() {
 
 
     bool isAlive = true;
@@ -86,10 +88,10 @@ bool Snake::MoveSnake( int boardWidth, int boardHeight) {
         if(direction == DOWN) segments[0].y++;
         if(direction == LEFT) segments[0].x--;
         if(direction == RIGHT) segments[0].x++;
-        if(segments[0].x >= (boardWidth)) segments[0].x = 0;
-        if(segments[0].y >= (boardHeight)) segments[0].y = 0;
-        if(segments[0].x < 0) segments[0].x = (boardWidth) - 1;
-        if(segments[0].y < 0) segments[0].y = (boardHeight) - 1;
+        if(segments[0].x >= (mGame.BoardWidth())) segments[0].x = 0;
+        if(segments[0].y >= (mGame.BoardHeight())) segments[0].y = 0;
+        if(segments[0].x < 0) segments[0].x = (mGame.BoardWidth()) - 1;
+        if(segments[0].y < 0) segments[0].y = (mGame.BoardHeight()) - 1;
 
         for(size_t i = 1; i < size; i++) {
             if((segments[0].x == segments[i].x) && (segments[0].y == segments[i].y)) {
